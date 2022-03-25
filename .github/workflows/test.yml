@@ -34,10 +34,11 @@ jobs:
     - name: 'Setup LLVM'
       shell: sh
       run: |
-        mkdir -p deps/LLVM
-        wget https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.1/clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04.tar.xz
-        tar -xvf clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04.tar.xz -C deps/LLVM
+        mkdir deps
+        wget -O deps/LLVM.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.1/clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04.tar.xz
+        tar -xvf deps/LLVM.tar.xz -C deps
         ls ./deps/LLVM
+
     - name: 'Build Jextract'
       shell: sh
       run: |
@@ -55,6 +56,7 @@ jobs:
       working-directory: ./deps/jtreg
       run: |
         bash ./deps/jtreg/make/build.sh --jdk ${JAVA_HOME_11_X64}
+
     - name: 'Run Tests'
       shell: sh
       run: |
