@@ -42,7 +42,7 @@ jobs:
     - name: 'Build Jextract'
       shell: sh
       run: |
-        sh ./gradlew -Pjdk18_home=$JAVA_HOME -Plibclang_home=./deps/LLVM clean verify        
+        sh ./gradlew -Pjdk18_home=$JAVA_HOME -Plibclang_home=./deps/clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04 clean verify        
         
     - name: 'Check out jtreg'
       uses: actions/checkout@v2
