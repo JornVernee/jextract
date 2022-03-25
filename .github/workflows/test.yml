@@ -37,7 +37,7 @@ jobs:
         mkdir deps
         wget -O deps/LLVM.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.1/clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04.tar.xz
         tar -xvf deps/LLVM.tar.xz -C deps
-        ls ./deps/LLVM
+        ls ./deps/clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04
 
     - name: 'Build Jextract'
       shell: sh
@@ -62,4 +62,4 @@ jobs:
       run: |
         java --version
         echo JAVA_HOME=$JAVA_HOME
-        sh ./gradlew -Pjdk18_home=$JAVA_HOME -Plibclang_home=./deps/LLVM -Pjtreg_home=./deps/jtreg jtreg
+        sh ./gradlew -Pjdk18_home=$JAVA_HOME -Plibclang_home=./deps/clang+llvm-13.0.1-x86_64-linux-gnu-ubuntu-18.04 -Pjtreg_home=./deps/jtreg jtreg
