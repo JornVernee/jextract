@@ -56,7 +56,7 @@ jobs:
       working-directory: ./deps/jtreg
       run: |
         bash ./make/build.sh --jdk ${JAVA_HOME_11_X64}
-        ls
+        ls build/images/jtreg
 
     - name: 'Run Tests'
       shell: sh
