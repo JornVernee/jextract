@@ -103,13 +103,30 @@ abstract class HeaderFileBuilder extends ClassSourceBuilder {
         String nativeName = funcTree.name();
         boolean isVarargs = funcTree.type().varargs();
 
-        Constant mhConstant = constants().addDowncallMethodHandle(nativeName, descriptor, isVarargs)
-                .emitGetter(this, MEMBER_MODS, javaName, nativeName);
         MethodType downcallType = descriptor.toMethodType();
         boolean needsAllocator = descriptor.returnLayout().isPresent() &&
                 descriptor.returnLayout().get() instanceof GroupLayout;
-        emitDocComment(funcTree);
-        emitFunctionWrapper(mhConstant, javaName, nativeName, downcallType, needsAllocator, isVarargs, parameterNames);
+        if (needsAllocator) {
+            // needs allocator parameter
+            downcallType = downcallType.insertParameterTypes(0, SegmentAllocator.class);
+            parameterNames = new ArrayList<>(parameterNames);
+            parameterNames.add(0, "allocator");
+        }
+
+        if (!isVarargs) {
+            Constant mhConstant = constants().addDowncallMethodHandle(nativeName, descriptor, isVarargs)
+                    .emitGetter(this, MEMBER_MODS, javaName, nativeName);
+            emitDocComment(funcTree);
+            emitFunctionWrapper(mhConstant, javaName, downcallType, parameterNames);
+        } else {
+            Constant funcDescConstant = constants().addFunctionDesc(descriptor)
+                    .emitGetter(this, MEMBER_MODS, javaName, nativeName);
+            String invokerName = javaName + "$invoker";
+            emitVariadicInvoker(invokerName, javaName, downcallType, parameterNames);
+            emitDocComment(funcTree);
+            emitVariadicFunctionWrapper(funcDescConstant, javaName, nativeName, downcallType,
+                    parameterNames, invokerName);
+        }
     }
 
     @Override
@@ -122,18 +139,11 @@ abstract class HeaderFileBuilder extends ClassSourceBuilder {
 
     // private generation
 
-    private void emitFunctionWrapper(Constant mhConstant, String javaName, String nativeName, MethodType declType,
-                                     boolean needsAllocator, boolean isVarargs, List<String> parameterNames) {
+    private void emitFunctionWrapper(Constant mhConstant, String javaName, MethodType declType, List<String> parameterNames) {
         incrAlign();
         indent();
         append(MEMBER_MODS + " ");
-        if (needsAllocator) {
-            // needs allocator parameter
-            declType = declType.insertParameterTypes(0, SegmentAllocator.class);
-            parameterNames = new ArrayList<>(parameterNames);
-            parameterNames.add(0, "allocator");
-        }
-        List<String> pExprs = emitFunctionWrapperDecl(javaName, declType, isVarargs, parameterNames);
+        List<String> pExprs = emitFunctionWrapperDecl(javaName, declType, false, parameterNames);
         append(" {\n");
         incrAlign();
         indent();
@@ -157,6 +167,85 @@ abstract class HeaderFileBuilder extends ClassSourceBuilder {
         decrAlign();
         indent();
         append("}\n");
+        decrAlign();
+        indent();
+        append("}\n");
+        decrAlign();
+    }
+
+    private void emitVariadicInvoker(String invokerName, String javaName, MethodType declType, List<String> parameterNames) {
+        incrAlign();
+        indent();
+        append("public interface " + invokerName + " {\n");
+        incrAlign();
+        indent();
+        emitFunctionWrapperDecl(javaName, declType, true, parameterNames);
+        append(";\n");
+        decrAlign();
+        indent();
+        append("}\n");
+        decrAlign();
+    }
+
+    private void emitVariadicFunctionWrapper(Constant funcDescConstant, String javaName, String nativeName, MethodType declType,
+                                             List<String> parameterNames, String invokerName) {
+        String invokerImplName = invokerName + "Impl";
+
+        incrAlign();
+        indent();
+        append(MEMBER_MODS + " ");
+        append(invokerName + " " + javaName + "$invoker(MemoryLayout... layouts) {\n");
+        incrAlign();
+        indent();
+        append("record ");
+        append(invokerImplName);
+        append("(MethodHandle mh) implements ");
+        append(invokerName);
+        append(" {\n");
+        incrAlign();
+        indent();
+        append("@Override\n");
+        indent();
+        append("public ");
+        List<String> pExprs = emitFunctionWrapperDecl(javaName, declType, true, parameterNames);
+        append("{\n");
+        incrAlign();
+        indent();
+        append("try {\n");
+        incrAlign();
+        indent();
+        if (!declType.returnType().equals(void.class)) {
+            append("return (" + declType.returnType().getName() + ")");
+        }
+        append("mh().invokeExact(" + String.join(", ", pExprs) + ");\n");
+        decrAlign();
+        indent();
+        append("} catch (Throwable ex$) {\n");
+        incrAlign();
+        indent();
+        append("throw new AssertionError(\"should not reach here\", ex$);\n");
+        decrAlign();
+        indent();
+        append("}\n");
+        decrAlign();
+        indent();
+        append("}\n");
+        decrAlign();
+        indent();
+        append("}\n");
+        indent();
+        append("var baseDesc$ = ");
+        append(funcDescConstant.getterName(javaName));
+        append("();\n");
+        indent();
+        append("var mh$ = RuntimeHelper.downcallHandleVariadic(\"");
+        append(nativeName);
+        append("\", ");
+        append("baseDesc$, layouts);\n");
+        indent();
+        append("return new ");
+        append(invokerImplName);
+        append("(mh$);\n");
         decrAlign();
         indent();
         append("}\n");
