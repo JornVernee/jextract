@@ -137,16 +137,6 @@ public class UnsupportedFilter implements Declaration.Visitor<Void, Declaration>
             return null;
         }
 
-        if (scoped.kind() == Kind.BITFIELDS) {
-            for (Declaration bitField : scoped.members()) {
-                if (!bitField.name().isEmpty()) {
-                    warnSkip(fieldName(firstNamedParent, bitField), unsupportedBitfield());
-                }
-            }
-            Skip.with(scoped);
-            return null;
-        }
-
         // propagate
         Declaration newNamedParent = !scoped.name().isEmpty() ? scoped : firstNamedParent;
         scoped.members().forEach(fieldTree -> {
@@ -291,9 +281,5 @@ public class UnsupportedFilter implements Declaration.Visitor<Void, Declaration>
 
     private String unsupportedVariadicCallback(String name) {
         return logger.format("unsupported.variadic.callback", name);
-    }
-
-    private String unsupportedBitfield() {
-        return logger.format("unsupported.bitfields");
     }
 }

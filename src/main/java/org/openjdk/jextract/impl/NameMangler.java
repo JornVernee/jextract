@@ -187,6 +187,8 @@ public final class NameMangler implements Declaration.Visitor<Void, Declaration>
             } finally {
                 this.curScope = oldScope;
             }
+        } else if (Utils.isBitfields(scoped)) {
+            scoped.members().forEach(fieldTree -> fieldTree.accept(this, null));
         }
 
         return null;

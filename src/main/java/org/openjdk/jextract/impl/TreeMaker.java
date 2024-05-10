@@ -55,10 +55,12 @@ import org.openjdk.jextract.clang.SourceLocation;
 import org.openjdk.jextract.clang.TypeKind;
 import org.openjdk.jextract.impl.DeclarationImpl.AnonymousStruct;
 import org.openjdk.jextract.impl.DeclarationImpl.ClangAlignOf;
+import org.openjdk.jextract.impl.DeclarationImpl.ClangBitFieldWidth;
 import org.openjdk.jextract.impl.DeclarationImpl.ClangOffsetOf;
 import org.openjdk.jextract.impl.DeclarationImpl.ClangSizeOf;
 import org.openjdk.jextract.impl.DeclarationImpl.NestedDeclarations;
 import org.openjdk.jextract.impl.DeclarationImpl.DeclarationString;
+import org.openjdk.jextract.impl.DeclarationImpl.Skip;
 
 /**
  * This class turns a clang cursor into a jextract declaration. All declarations are de-duplicated,
@@ -278,6 +280,11 @@ class TreeMaker {
                     Variable bitfieldDecl = Declaration.bitfield(CursorPosition.of(fc), fc.spelling(), fc.getBitFieldWidth(), fieldType);
                     if (!fc.spelling().isEmpty()) {
                         ClangOffsetOf.with(bitfieldDecl, parent.type().getOffsetOf(fc.spelling()));
+                        ClangBitFieldWidth.with(bitfieldDecl, fc.getBitFieldWidth());
+                        withDeclarationString(bitfieldDecl, fc);
+                    } else {
+                        // no name, always skip
+                        Skip.with(bitfieldDecl);
                     }
                     pendingBitFields.add(bitfieldDecl);
                 } else {

@@ -26,6 +26,7 @@ package testlib;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.foreign.MemorySegment;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -260,6 +261,11 @@ public class JextractToolRunner {
         assertTrue(returnType.isAssignableFrom(m.getReturnType())); // tolerate more specific type
         assertEquals(m.getParameterTypes(), args);
         return m;
+    }
+
+    protected void checkBitField(Class<?> fooCls, String name, Class<?> carrier) {
+        checkMethod(fooCls, name, carrier, MemorySegment.class);
+        checkMethod(fooCls, name, void.class, MemorySegment.class, carrier);
     }
 
     protected static MemoryLayout findLayout(Class<?> cls, String name) {

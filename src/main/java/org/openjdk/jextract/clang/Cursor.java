@@ -170,7 +170,11 @@ public final class Cursor extends ClangDisposable.Owned {
     }
 
     public int getBitFieldWidth() {
-        return Index_h.clang_getFieldDeclBitWidth(segment);
+        int width = Index_h.clang_getFieldDeclBitWidth(segment);
+        if (width == -1) {
+            throw new IllegalStateException("Can not get bit field width");
+        }
+        return width;
     }
 
     public CursorKind kind() {

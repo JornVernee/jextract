@@ -28,11 +28,7 @@ package org.openjdk.jextract.impl;
 
 import org.openjdk.jextract.Declaration;
 import org.openjdk.jextract.Declaration.Constant;
-import org.openjdk.jextract.Declaration.Scoped;
-import org.openjdk.jextract.Declaration.Typedef;
-import org.openjdk.jextract.JavaSourceFile;
 import org.openjdk.jextract.Type;
-import org.openjdk.jextract.Type.Declared;
 import org.openjdk.jextract.Type.Delegated;
 import org.openjdk.jextract.Type.Delegated.Kind;
 import org.openjdk.jextract.Type.Function;
@@ -277,5 +273,41 @@ class Utils {
                 carrierFor(type.returnType()),
                 type.argumentTypes().stream().map(Utils::carrierFor).toList()
         );
+    }
+
+    public static Class<?> storageUnitCarrierFor(int bitSizeOfStorageUnit) {
+        if (bitSizeOfStorageUnit > 0 && bitSizeOfStorageUnit <= 8) {
+            return byte.class;
+        } else if (bitSizeOfStorageUnit > 8 && bitSizeOfStorageUnit <= 16) {
+            return short.class;
+        } else if (bitSizeOfStorageUnit > 16 && bitSizeOfStorageUnit <= 32) {
+            return int.class;
+        } else if (bitSizeOfStorageUnit > 32 && bitSizeOfStorageUnit <= 64) {
+            return long.class;
+        } else {
+            throw new IllegalArgumentException("No carrier for size: " + bitSizeOfStorageUnit);
+        }
+    }
+
+    public static String bitMask(int bitWidth, int offsetInStorageUnit) {
+        return "0b" + "1".repeat(bitWidth) + "0".repeat(offsetInStorageUnit) + (bitWidth > 32 ? "L" : "");
+    }
+
+    public static String layoutFieldForStorageUnit(Class<?> carrier) {
+        if (carrier == byte.class) {
+            return "JAVA_BYTE";
+        } else if (carrier == short.class) {
+            return "JAVA_SHORT_UNALIGNED";
+        } else if (carrier == int.class) {
+            return "JAVA_INT_UNALIGNED";
+        } else if (carrier == long.class) {
+            return "JAVA_LONG_UNALIGNED";
+        } else {
+            throw new IllegalStateException("Unknown carrier: " + carrier);
+        }
+    }
+
+    public static boolean isBitfields(Declaration decl) {
+        return decl instanceof Declaration.Scoped scoped && scoped.kind() == Declaration.Scoped.Kind.BITFIELDS;
     }
 }

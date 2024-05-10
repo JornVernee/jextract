@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 import org.openjdk.jextract.Declaration;
@@ -457,6 +458,22 @@ public abstract class DeclarationImpl implements Declaration {
         public static long getOrThrow(Declaration declaration) {
             return declaration.getAttribute(ClangOffsetOf.class)
                     .stream().mapToLong(ClangOffsetOf::offset).findFirst().getAsLong();
+        }
+    }
+
+    record ClangBitFieldWidth(int offset) {
+        public static void with(Declaration declaration, int size) {
+            declaration.addAttribute(new ClangBitFieldWidth(size));
+        }
+
+        public static OptionalInt get(Declaration declaration) {
+            return declaration.getAttribute(ClangBitFieldWidth.class)
+                    .stream().mapToInt(ClangBitFieldWidth::offset).findFirst();
+        }
+
+        public static int getOrThrow(Declaration declaration) {
+            return declaration.getAttribute(ClangBitFieldWidth.class)
+                    .stream().mapToInt(ClangBitFieldWidth::offset).findFirst().getAsInt();
         }
     }
 

@@ -50,11 +50,23 @@ package org.openjdk.jextract.test.toolprovider;
 
 import org.testng.annotations.Test;
 import testlib.JextractToolRunner;
+import testlib.TestUtils;
 
-public class BadBitfieldTest extends JextractToolRunner {
+import java.lang.foreign.MemorySegment;
+import java.nio.file.Path;
+
+public class BitfieldTest extends JextractToolRunner {
     @Test
     public void testBadBitfield() {
-        runAndCompile(getOutputFilePath("badBitfieldsGen"),
-                getInputFilePath("badBitfields.h").toString());
+        Path dirPath = getOutputFilePath("badBitfieldsGen");
+        runAndCompile(dirPath,
+                getInputFilePath("bitfields.h").toString());
+        try (TestUtils.Loader loader = TestUtils.classLoader(dirPath)) {
+            Class<?> fooCls = loader.loadClass("Foo");
+            checkBitField(fooCls, "a", long.class);
+            checkBitField(fooCls, "b", int.class);
+            checkBitField(fooCls, "c", byte.class);
+            checkBitField(fooCls, "d", long.class);
+        }
     }
 }

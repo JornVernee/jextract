@@ -125,7 +125,7 @@ task createJextractImage(type: Exec) {
          "--module-path=$jmods_dir",
          "--add-modules=org.openjdk.jextract",
          "--output=${jextract_app_dir}/runtime",
-         "--strip-debug", "--no-man-pages", "--no-header-files",
+         "--no-man-pages", "--no-header-files",
          "--add-options",
          "${quote_jlink_opts}"
     ]
@@ -222,6 +222,7 @@ void createJtregTask(String name, boolean coverage, String os_lib_dir) {
                 "-nativepath:$buildDir/testlib-install/${os_lib_dir}",
                 "-javaoption:--enable-preview",
                 "-javaoption:--enable-native-access=org.openjdk.jextract,ALL-UNNAMED",
+                "-javaoption:-Djextract.debug=true",
                 "-avm", "-conc:auto", "-verbose:summary,fail,error",
                 "-retain:fail,error",
         ]

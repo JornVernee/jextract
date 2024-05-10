@@ -133,26 +133,42 @@ final class StructBuilder extends ClassSourceBuilder implements OutputFactory.Bu
     @Override
     public void addVar(Declaration.Variable varTree) {
         String javaName = JavaName.getOrThrow(varTree);
-        appendBlankLine();
-        String layoutField = emitLayoutFieldDecl(varTree, javaName);
-        appendBlankLine();
-        String offsetField = emitOffsetFieldDecl(varTree, javaName);
-        if (Utils.isArray(varTree.type()) || Utils.isStructOrUnion(varTree.type())) {
-            emitSegmentGetter(javaName, varTree, offsetField, layoutField);
-            emitSegmentSetter(javaName, varTree, offsetField, layoutField);
-            int dims = Utils.dimensions(varTree.type()).size();
-            if (dims > 0) {
-                emitDimensionsFieldDecl(varTree, javaName);
-                String arrayHandle = emitArrayElementHandle(javaName, varTree, layoutField, dims);
-                IndexList indexList = IndexList.of(dims);
-                emitFieldArrayGetter(javaName, varTree, arrayHandle, indexList);
-                emitFieldArraySetter(javaName, varTree, arrayHandle, indexList);
-            }
-        } else if (Utils.isPointer(varTree.type()) || Utils.isPrimitive(varTree.type())) {
-            emitFieldGetter(javaName, varTree, layoutField, offsetField);
-            emitFieldSetter(javaName, varTree, layoutField, offsetField);
+        if (varTree.kind() == Variable.Kind.BITFIELD) {
+            // figure out first byte-offset preceding the bitfield
+            long bitOffset = ClangOffsetOf.getOrThrow(varTree);
+            int bitWidth = DeclarationImpl.ClangBitFieldWidth.getOrThrow(varTree);
+            long byteOffsetOfStorageUnit = bitOffset / 8; // truncate, start of storage unit
+            // figure out integral primitive that encompasses the bitfield
+            int bitOffsetInStorageUnit = (int) (bitOffset - (byteOffsetOfStorageUnit * 8));
+            int bitSizeOfStorageUnit = bitOffsetInStorageUnit + bitWidth;
+            Class<?> carrier = Utils.storageUnitCarrierFor(bitSizeOfStorageUnit);
+            String layoutField = Utils.layoutFieldForStorageUnit(carrier);
+            // generate accessors
+            String bitMask = Utils.bitMask(bitWidth, bitOffsetInStorageUnit);
+            emitBitFieldGetter(javaName, varTree, carrier, layoutField, bitMask, byteOffsetOfStorageUnit, bitOffsetInStorageUnit);
+            emitBitFieldSetter(javaName, varTree, carrier, layoutField, bitMask, byteOffsetOfStorageUnit, bitOffsetInStorageUnit);
         } else {
-            throw new IllegalArgumentException(STR."Type not supported: \{varTree.type()}");
+            appendBlankLine();
+            String layoutField = emitLayoutFieldDecl(varTree, javaName);
+            appendBlankLine();
+            String offsetField = emitOffsetFieldDecl(varTree, javaName);
+            if (Utils.isArray(varTree.type()) || Utils.isStructOrUnion(varTree.type())) {
+                emitSegmentGetter(javaName, varTree, offsetField, layoutField);
+                emitSegmentSetter(javaName, varTree, offsetField, layoutField);
+                int dims = Utils.dimensions(varTree.type()).size();
+                if (dims > 0) {
+                    emitDimensionsFieldDecl(varTree, javaName);
+                    String arrayHandle = emitArrayElementHandle(javaName, varTree, layoutField, dims);
+                    IndexList indexList = IndexList.of(dims);
+                    emitFieldArrayGetter(javaName, varTree, arrayHandle, indexList);
+                    emitFieldArraySetter(javaName, varTree, arrayHandle, indexList);
+                }
+            } else if (Utils.isPointer(varTree.type()) || Utils.isPrimitive(varTree.type())) {
+                emitFieldGetter(javaName, varTree, layoutField, offsetField);
+                emitFieldSetter(javaName, varTree, layoutField, offsetField);
+            } else {
+                throw new IllegalArgumentException(STR."Type not supported: \{varTree.type()}");
+            }
         }
     }
 
@@ -204,6 +220,35 @@ final class StructBuilder extends ClassSourceBuilder implements OutputFactory.Bu
         appendIndentedLines(STR."""
             public static void \{javaName}(MemorySegment \{segmentParam}, \{type.getSimpleName()} \{valueParam}) {
                 \{segmentParam}.set(\{layoutField}, \{offsetField}, \{valueParam});
+            }
+            """);
+    }
+
+    private void emitBitFieldGetter(String javaName, Declaration.Variable varTree, Class<?> carrier, String layoutField,
+                                    String bitMask, long byteStorageUnitOffset, long bitOffsetInStorageUnit) {
+        String segmentParam = safeParameterName(kindName());
+        appendBlankLine();
+        emitFieldDocComment(varTree, "Getter for field:");
+        String cast = carrier == byte.class || carrier == short.class ? STR."(\{carrier.getSimpleName()})" : "";
+        appendIndentedLines(STR."""
+            public static \{carrier.getSimpleName()} \{javaName}(MemorySegment \{segmentParam}) {
+                var storageUnitValue = \{segmentParam}.get(\{layoutField}, \{byteStorageUnitOffset}L);
+                return \{cast} ((storageUnitValue & \{bitMask}) >> \{bitOffsetInStorageUnit});
+            }
+            """);
+    }
+
+    private void emitBitFieldSetter(String javaName, Declaration.Variable varTree, Class<?> carrier, String layoutField,
+                                    String bitMask, long storageUnitOffset, long offsetInStorageUnit) {
+        String segmentParam = safeParameterName(kindName());
+        String valueParam = safeParameterName("fieldValue");
+        appendBlankLine();
+        emitFieldDocComment(varTree, "Setter for field:");
+        appendIndentedLines(STR."""
+            public static void \{javaName}(MemorySegment \{segmentParam}, \{carrier.getSimpleName()} \{valueParam}) {
+                var storageUnitValue = \{segmentParam}.get(\{layoutField}, \{storageUnitOffset}L);
+                storageUnitValue |= (\{valueParam} & \{bitMask}) << \{offsetInStorageUnit};
+                \{segmentParam}.set(\{layoutField}, \{storageUnitOffset}L, storageUnitValue);
             }
             """);
     }
@@ -458,7 +503,8 @@ final class StructBuilder extends ClassSourceBuilder implements OutputFactory.Bu
 
         long size = 0L; // bits
         for (Declaration member : scoped.members()) {
-            if (!Skip.isPresent(member)) {
+            if (!Skip.isPresent(member)
+                    && !Utils.isBitfields(member)) {
                 long nextOffset = recordMemberOffset(member);
                 long delta = nextOffset - offset;
                 if (delta > 0) {
