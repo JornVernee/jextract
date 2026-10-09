@@ -68,3 +68,9 @@ int var11;
  * * block comment with two leading asterisks
  */
 int var12;
+
+/*
+block comment with embedded
+// line comment
+*/
+int var13;

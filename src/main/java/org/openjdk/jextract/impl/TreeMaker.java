@@ -26,16 +26,10 @@
 package org.openjdk.jextract.impl;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.OptionalLong;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.openjdk.jextract.Declaration;
 import org.openjdk.jextract.Declaration.ClangAttributes;
@@ -132,88 +126,48 @@ class TreeMaker {
         if (rv != null && copyComments) {
             String rawCommentText = c.getRawCommentText();
             if (rawCommentText != null) {
-                List<String> comments = normalizeComments(rawCommentTextToCommentList(rawCommentText));
+                List<String> comments = normalizeComments(rawCommentText.lines());
                 DeclarationImpl.DeclarationComments.with(rv, comments);
             }
         }
         return addAttributes(rv, c);
     }
 
-    static List<String> normalizeComments(List<String> rawComments) {
-        return rawComments.stream().map(comment -> {
-            if (comment.startsWith("///")) {
-                return comment.substring("///".length()).strip();
-            }
-            if (comment.startsWith("//")) {
-                return comment.substring("//".length()).strip();
-            }
-            if (comment.startsWith("/**")) {
-                return removeLeadingAsterixes(comment.substring("/**".length(), comment.length() - "*/".length()).strip());
-            }
-            if (comment.startsWith("/*")) {
-                return removeLeadingAsterixes(comment.substring("/*".length(), comment.length() - "*/".length()).strip());
-            }
-            // a C comment must be a line comment (`//...`) or a block comment (`/*...*/`)
-            throw new AssertionError("Invalid C comment");
-        }).toList();
-    }
-
-    private static String removeLeadingAsterixes(String blockComment) {
-        return blockComment.lines().map(String::stripLeading).map(line -> {
-            if (line.startsWith("* ")) {
-                return line.substring("* ".length()).strip();
-            }
-            // blank lines in multi-line comments usually do not have a trailing space
-            if (line.startsWith("*")) {
-                return line.substring("*".length()).strip();
-            }
-            return line.strip();
-        }).collect(Collectors.joining("\n"));
-    }
-
-    private static List<String> rawCommentTextToCommentList(String rawCommentText) {
-        List<String> comments = new ArrayList<>();
-        int cursor = 0;
-        int length = rawCommentText.length();
-        while (cursor < length) {
-            while (cursor < length && Character.isWhitespace(rawCommentText.charAt(cursor))) {
-                cursor++;
-            }
-            if (cursor == length) {
-                break;
-            }
-            // comment delimiter is always 2 characters and starts with '/'
-            if (cursor + 1 >= length || rawCommentText.charAt(cursor) != '/') {
-                throw new AssertionError("Invalid C comment start");
-            }
-            char secondChar = rawCommentText.charAt(cursor + 1);
-
-            switch (secondChar) {
-                case '/' -> {
-                    int end = cursor + "/*".length();
-                    while (end < length) {
-                        char c = rawCommentText.charAt(end);
-                        if (c == '\n' || c == '\r') {
-                            break;
+    private static List<String> normalizeComments(Stream<String> rawComments) {
+        Iterator<String> itt = rawComments.iterator();
+        List<String> result = new ArrayList<>();
+        while (itt.hasNext()) {
+            String line = itt.next().stripLeading();
+            // single line comments
+            if (line.startsWith("///")) {
+                result.add(line.substring(3).strip());
+            } else if (line.startsWith("//")) {
+                result.add(line.substring(2).strip());
+            } else if (line.startsWith("/*")) {
+                // block comment
+                line = line.substring(line.startsWith("/**") ? 3 : 2);
+                if (line.endsWith("*/")) {
+                    // everything on a single line
+                    result.add(line.substring(0, line.length() - 2).strip());
+                } else {
+                    // collect other lines
+                    result.add(line.strip());
+                    for (line = itt.next().stripLeading(); !line.endsWith("*/"); line = itt.next().stripLeading()) {
+                        if (line.startsWith("*")) {
+                            // strip off leading '*'
+                            line = line.substring(1);
                         }
-                        end++;
+                        result.add(line.strip());
                     }
-                    comments.add(rawCommentText.substring(cursor, end));
-                    cursor = end;
-                }
-                case '*' -> {
-                    int end = rawCommentText.indexOf("*/", cursor + "/*".length());
-                    if (end == -1) {
-                        throw new AssertionError("Unterminated C comment");
+                    // might have one more leading '*'
+                    if (line.length() > 2 && line.startsWith("*")) {
+                        line = line.substring(1); // drop leading '*'
                     }
-                    end += "*/".length();
-                    comments.add(rawCommentText.substring(cursor, end));
-                    cursor = end;
+                    result.add(line.substring(0, line.length() - 2).strip());
                 }
-                default -> throw new AssertionError("Invalid C comment start");
             }
         }
-        return Collections.unmodifiableList(comments);
+        return result;
     }
 
     static List<String> extractMacroComments(Cursor c) {
@@ -246,10 +200,11 @@ class TreeMaker {
             end = begin;
         }
 
-        return Collections.unmodifiableList(comments.reversed());
+        return normalizeComments(comments.reversed().stream().flatMap(String::lines));
     }
 
-    private static boolean getPrecedingCommentTokens(TranslationUnit tu, SourceLocation begin, SourceLocation end, int skips, List<String> outputComments) {
+    private static boolean getPrecedingCommentTokens(TranslationUnit tu, SourceLocation begin, SourceLocation end,
+                                                     int skips, List<String> outputComments) {
         try (TranslationUnit.Tokens tokens = tu.tokenizeRange(begin, end)) {
             int i = tokens.size() - 1 - skips;
             SourceLocation nextSourceLocation;

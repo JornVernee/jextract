@@ -310,7 +310,7 @@ class MacroParserImpl implements AutoCloseable {
                     .map(e -> {
                         Declaration.Constant constant = ((Success) e).constant();
                         if (e.comments != null) {
-                            DeclarationImpl.DeclarationComments.with(constant, TreeMaker.normalizeComments(e.comments));
+                            DeclarationImpl.DeclarationComments.with(constant, e.comments);
                         }
                         return constant;
                     })

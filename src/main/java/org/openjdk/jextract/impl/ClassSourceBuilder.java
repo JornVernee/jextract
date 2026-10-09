@@ -336,7 +336,6 @@ abstract class ClassSourceBuilder {
                 // see https://docs.oracle.com/en/java/javase/25/docs/specs/javadoc/doc-comment-spec.html#escape-sequences
                 .replace("*/", "*@/")
             )
-            .flatMap(String::lines)
             .map(line -> " * " + line + "\n")
             .collect(Collectors.joining());
     }
